@@ -4,6 +4,17 @@ from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "debates.db")
 
+# Words too common to use as search keywords
+STOPWORDS = {
+    "is", "are", "was", "were", "will", "would", "could", "should",
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to",
+    "for", "of", "with", "by", "from", "that", "this", "it", "be",
+    "do", "does", "did", "has", "have", "had", "not", "more", "than",
+    "already", "just", "also", "very", "too", "so", "yet", "still",
+    "about", "can", "may", "might", "its", "their", "our", "your"
+}
+
+
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -53,7 +64,7 @@ def save_argument(debate_id: int, round_num: int, score: dict):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        INSERT INTO arguments 
+        INSERT INTO arguments
         (debate_id, round_num, agent_name, argument, logic_score, evidence_score, coherence_score, total_score, fallacy)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
@@ -72,22 +83,53 @@ def save_argument(debate_id: int, round_num: int, score: dict):
 
 
 def get_past_debates(topic: str, limit: int = 3) -> str:
+    """
+    Only returns memory if a past debate topic is a strong match.
+    
+    Strong match = at least 2 meaningful keywords overlap between
+    the current topic and a past topic. This prevents common words
+    like 'is', 'will', 'the' from triggering false memory loads.
+    """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    keywords = topic.split()[:3]
-    query = "SELECT topic, winner, verdict, created_at FROM debates WHERE " + \
-            " OR ".join(["topic LIKE ?" for _ in keywords]) + \
-            " ORDER BY created_at DESC LIMIT ?"
-    params = [f"%{kw}%" for kw in keywords] + [limit]
-    c.execute(query, params)
+
+    # Extract meaningful keywords — strip stopwords, min 4 chars
+    def extract_keywords(text):
+        words = text.lower().split()
+        return {w.strip(".,?!") for w in words
+                if w not in STOPWORDS and len(w) >= 4}
+
+    current_keywords = extract_keywords(topic)
+
+    # Need at least 2 meaningful keywords to even attempt matching
+    if len(current_keywords) < 2:
+        conn.close()
+        return ""
+
+    # Fetch recent debates
+    c.execute("SELECT topic, winner, verdict, created_at FROM debates ORDER BY created_at DESC LIMIT 50")
     rows = c.fetchall()
     conn.close()
 
     if not rows:
         return ""
 
-    formatted = ["[MEMORY: Past debates on similar topics]"]
+    matched = []
     for row in rows:
+        past_keywords = extract_keywords(row[0])
+        overlap = current_keywords & past_keywords
+
+        # Require at least 2 keyword matches to count as related
+        if len(overlap) >= 2:
+            matched.append(row)
+            if len(matched) >= limit:
+                break
+
+    if not matched:
+        return ""
+
+    formatted = ["[MEMORY: Past debates on similar topics]"]
+    for row in matched:
         formatted.append(
             f"- Topic: '{row[0]}' | Winner: {row[1]} | Date: {row[3][:10]}\n"
             f"  Verdict summary: {row[2][:200] if row[2] else 'N/A'}..."
@@ -99,7 +141,7 @@ def get_agent_stats(agent_name: str) -> dict:
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        SELECT 
+        SELECT
             COUNT(*) as total_args,
             AVG(logic_score) as avg_logic,
             AVG(evidence_score) as avg_evidence,
