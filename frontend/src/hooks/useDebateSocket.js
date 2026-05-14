@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 
-const WS_URL = "ws://localhost:8000/debate";
+const WS_URL = "wss://agent-arena-g2wy.onrender.com/debate";
 
 export const AGENT_CONFIG = {
   "Optimist":         { color: "green",  emoji: "🟢", border: "border-green-500",  text: "text-green-400",  bg: "bg-green-500/10"  },
