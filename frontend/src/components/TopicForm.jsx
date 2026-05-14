@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function TopicForm({ onStart, onStop, status }) {
+export default function TopicForm({ onStart, onStop, status, prefillTopic }) {
   const [topic, setTopic]   = useState("");
   const [rounds, setRounds] = useState(2);
   const isRunning = status === "running" || status === "connecting";
+
+  useEffect(() => {
+    if (prefillTopic) setTopic(prefillTopic);
+  }, [prefillTopic]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -23,12 +27,11 @@ export default function TopicForm({ onStart, onStop, status }) {
                      focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/20
                      transition-all text-sm leading-relaxed"
           rows={2}
-          placeholder="e.g. Social media is doing more harm than good to democracy…"
+          placeholder="e.g. Should we pivot to B2B? Is this market oversaturated?..."
           value={topic}
           onChange={e => setTopic(e.target.value)}
           disabled={isRunning}
         />
-
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
@@ -52,7 +55,6 @@ export default function TopicForm({ onStart, onStop, status }) {
               ))}
             </div>
           </div>
-
           <div className="flex items-center gap-3">
             {isRunning && (
               <button type="button" onClick={onStop} className="btn-danger">
